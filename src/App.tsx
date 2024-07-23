@@ -6,7 +6,11 @@ import Medicines from './pages/Medicines'; // Import Medicines component
 import GeneralItems from './pages/GeneralItems'; // Import GeneralItems component
 import Add from './pages/Add'; // Import Add component
 import AddToCart from './pages/AddToCart'; // Import AddToCart component
-
+import ViewMedicines from './pages/ViewMedicines'; // Import ViewMedicines component
+import Search from './pages/Search';
+import Signup from './pages/Signup';
+import Login from './pages/Login';
+import Homeafterlogin from './pages/Homeafterlogin'
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
 
@@ -23,22 +27,9 @@ import '@ionic/react/css/text-transformation.css';
 import '@ionic/react/css/flex-utils.css';
 import '@ionic/react/css/display.css';
 
-/**
- * Ionic Dark Mode
- * -----------------------------------------------------
- * For more info, please see:
- * https://ionicframework.com/docs/theming/dark-mode
- */
-
-/* import '@ionic/react/css/palettes/dark.always.css'; */
-/* import '@ionic/react/css/palettes/dark.class.css'; */
-import '@ionic/react/css/palettes/dark.system.css';
-
 /* Theme variables */
 import './theme/variables.css';
 import './pages/AddToCart.css'; // Import AddToCart CSS
-import ViewMedicines from './pages/ViewMedicines';
-import Search from './pages/Search';
 
 setupIonicReact();
 
@@ -46,25 +37,33 @@ const App: React.FC = () => (
   <IonApp>
     <IonReactRouter>
       <IonRouterOutlet>
+        <Route exact path="/Login">
+          <Login />
+        </Route>
+        <Route exact path="/SignUp">
+          <Signup />
+        </Route>
         <Route exact path="/home">
           <Home />
         </Route>
-        <Route exact path="/add"> {/* Define route for Add */}
-          <Add />
+        <Route exact path="/homeafterlogin">
+          <Homeafterlogin/>
         </Route>
-        <Route exact path="/add/medicines"> {/* Define route for Medicines */}
+        <Route exact path="/add/:pharmacyName">
           <Medicines />
         </Route>
-        <Route path="/view-medicines" component={ViewMedicines} exact />
-        <Route path="/search" component={Search} exact />
-        <Route exact path="/add/general-items"> {/* Define route for General Items */}
+        <Route exact path="/view/:pharmacyName">
+          <ViewMedicines />
+        </Route>
+        <Route exact path="/search/:pharmacyName" component={Search} />
+        <Route exact path="/add/general-items">
           <GeneralItems />
         </Route>
-        <Route exact path="/add-to-cart"> {/* Define route for AddToCart */}
+        <Route exact path="/add-to-cart">
           <AddToCart />
         </Route>
         <Route exact path="/">
-          <Redirect to="/home" /> {/* Change to redirect to /home */}
+          <Redirect to="/home" />
         </Route>
       </IonRouterOutlet>
     </IonReactRouter>

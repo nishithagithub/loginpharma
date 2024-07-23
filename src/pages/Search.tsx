@@ -12,11 +12,14 @@ import {
   IonTitle,
   IonList,
   IonListHeader,
-  IonNote,
 } from "@ionic/react";
 import React, { useState, useEffect, useRef } from "react";
-import { useHistory } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
 import useSQLiteDB from "../composables/useSQLiteDB";
+
+interface RouteState {
+  pharmacyName: string;
+}
 
 const Search: React.FC = () => {
   const [searchType, setSearchType] = useState<"medicines" | "general_items">("medicines");
@@ -27,12 +30,25 @@ const Search: React.FC = () => {
   const [toastMessage, setToastMessage] = useState("");
   const inputRef = useRef<HTMLIonInputElement>(null);
 
-  const { performSQLAction } = useSQLiteDB();
+  const location = useLocation();
   const history = useHistory();
+  const state = location.state as RouteState | undefined;
+  const pharmacyName = state?.pharmacyName || '';
+  
+  const { performSQLAction } = useSQLiteDB(pharmacyName);
+
+  const navigateTo = (path: string) => {
+    history.push({
+      pathname: path,
+      state: { pharmacyName }
+    });
+  };
 
   useEffect(() => {
-    fetchAllItems();
-  }, [searchType]);
+    if (pharmacyName) {
+      fetchAllItems();
+    }
+  }, [searchType, pharmacyName]);
 
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
@@ -51,11 +67,11 @@ const Search: React.FC = () => {
         element?.removeEventListener("keydown", handleKeyPress);
       });
     };
-  }, [searchText]); // Adding searchText as a dependency to use the latest value
+  }, [searchText]);
 
   const fetchAllItems = async () => {
     await performSQLAction(async (db) => {
-      const query = `SELECT * FROM ${searchType}`;
+      const query = `SELECT * FROM ${searchType}_${pharmacyName}`;
       const results = await db?.query(query);
       setSearchResults(results?.values ?? []);
     });
@@ -69,7 +85,7 @@ const Search: React.FC = () => {
     }
 
     await performSQLAction(async (db) => {
-      const query = `SELECT * FROM ${searchType} WHERE name LIKE ?`;
+      const query = `SELECT * FROM ${searchType}_${pharmacyName} WHERE name LIKE ?`;
       const results = await db?.query(query, [`%${searchText}%`]);
       const items = results?.values ?? [];
 
@@ -79,7 +95,7 @@ const Search: React.FC = () => {
       }
 
       setSearchResults(items);
-      setSuggestions([]); // Clear suggestions after search
+      setSuggestions([]);
     });
   };
 
@@ -90,7 +106,7 @@ const Search: React.FC = () => {
     }
 
     await performSQLAction(async (db) => {
-      const query = `SELECT name FROM ${searchType} WHERE name LIKE ? LIMIT 5`;
+      const query = `SELECT name FROM ${searchType}_${pharmacyName} WHERE name LIKE ? LIMIT 5`;
       const results = await db?.query(query, [`${text}%`]);
       const items = results?.values ?? [];
       setSuggestions(items);
@@ -107,12 +123,10 @@ const Search: React.FC = () => {
     const newItem = { ...item, quantity };
     const newQuantity = item.quantity - quantity;
 
-    // Update the database
     await performSQLAction(async (db) => {
-      await db?.query(`UPDATE ${searchType} SET quantity = ? WHERE id = ?`, [newQuantity, item.id]);
+      await db?.query(`UPDATE ${searchType}_${pharmacyName} SET quantity = ? WHERE id = ?`, [newQuantity, item.id]);
     });
 
-    // Save the cart item in local storage
     let cartItems = JSON.parse(localStorage.getItem('cartItems') || '[]');
     cartItems.push(newItem);
     localStorage.setItem('cartItems', JSON.stringify(cartItems));
@@ -120,10 +134,8 @@ const Search: React.FC = () => {
     setToastMessage("Item added to cart.");
     setShowToast(true);
 
-    // Fetch and display the updated search results
     await searchItems();
 
-    // Clear input value after adding to cart
     const inputElement = document.getElementById(`quantity-${item.id}`) as HTMLInputElement;
     if (inputElement) {
       inputElement.value = '';
@@ -131,13 +143,13 @@ const Search: React.FC = () => {
   };
 
   const goToCart = () => {
-    history.push('/add-to-cart'); // Navigate to the AddToCart page
+    navigateTo('/add-to-cart');
   };
 
   return (
     <IonPage>
-      <IonHeader className='pgcolor'> 
-        <div className="hd-button">  
+      <IonHeader className='pgcolor'>
+        <div className="hd-button">
           <IonTitle>Search</IonTitle>
           <IonButton shape="round" color="light" onClick={goToCart}>Cart</IonButton>
         </div>

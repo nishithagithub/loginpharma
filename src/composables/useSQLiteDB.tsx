@@ -5,7 +5,7 @@ import {
   CapacitorSQLite,
 } from "@capacitor-community/sqlite";
 
-const useSQLiteDB = () => {
+const useSQLiteDB = (pharmacyname: string) => {
   const db = useRef<SQLiteDBConnection>();
   const sqlite = useRef<SQLiteConnection>();
   const [initialized, setInitialized] = useState<boolean>(false);
@@ -16,13 +16,14 @@ const useSQLiteDB = () => {
 
       sqlite.current = new SQLiteConnection(CapacitorSQLite);
       const ret = await sqlite.current.checkConnectionsConsistency();
-      const isConn = (await sqlite.current.isConnection("db_vite", false)).result;
+      const isConn = (await sqlite.current.isConnection(pharmacyname, false))
+        .result;
 
       if (ret.result && isConn) {
-        db.current = await sqlite.current.retrieveConnection("db_vite", false);
+        db.current = await sqlite.current.retrieveConnection(pharmacyname, false);
       } else {
         db.current = await sqlite.current.createConnection(
-          "db_vite",
+          pharmacyname,
           false,
           "no-encryption",
           1,
@@ -35,25 +36,22 @@ const useSQLiteDB = () => {
     };
 
     initializeDB();
-  }, []);
+  }, [pharmacyname]);
 
   const performSQLAction = async (
     action: (db: SQLiteDBConnection | undefined) => Promise<void>,
-    cleanup?: () => Promise<void>
+    successCallback?: () => void,
+    errorCallback?: (error: Error) => void
   ) => {
     try {
       await db.current?.open();
       await action(db.current);
+      if (successCallback) successCallback();
     } catch (error) {
-      if ((error as Error).message.includes("UNIQUE constraint failed")) {
-        alert("A medicine with this name already exists. Please use a different name.");
-      } else {
-        alert((error as Error).message);
-      }
+      if (errorCallback) errorCallback(error as Error);
     } finally {
       try {
-        (await db.current?.isDBOpen())?.result && (await db.current?.close());
-        cleanup && (await cleanup());
+        await db.current?.close();
       } catch {}
     }
   };
@@ -61,9 +59,9 @@ const useSQLiteDB = () => {
   const initializeTables = async () => {
     performSQLAction(async (db: SQLiteDBConnection | undefined) => {
       const queryCreateMedicinesTable = `
-        CREATE TABLE IF NOT EXISTS medicines (
+        CREATE TABLE IF NOT EXISTS medicines_${pharmacyname} (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT UNIQUE,
+          name TEXT,
           type TEXT,
           quantity TEXT,
           expiry_date TEXT,
@@ -73,7 +71,7 @@ const useSQLiteDB = () => {
       `;
 
       const queryCreateGeneralItemsTable = `
-        CREATE TABLE IF NOT EXISTS general_items (
+        CREATE TABLE IF NOT EXISTS general_items_${pharmacyname} (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT,
           quantity TEXT,
@@ -81,14 +79,54 @@ const useSQLiteDB = () => {
         );
       `;
 
+      const queryCreateUserTable = `
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          pharmacy_name TEXT,
+          email TEXT UNIQUE,
+          phone_number TEXT UNIQUE,
+          password TEXT
+        );
+      `;
+
       await db?.execute(queryCreateMedicinesTable);
       await db?.execute(queryCreateGeneralItemsTable);
+      await db?.execute(queryCreateUserTable);
 
       console.log("Tables created successfully.");
     });
   };
 
-  return { performSQLAction, initialized };
+  const registerUser = async (pharmacyName: string, email: string, phoneNumber: string, password: string, successCallback?: () => void, errorCallback?: (error: Error) => void) => {
+    await performSQLAction(async (db) => {
+      const query = `
+        INSERT INTO users (pharmacy_name, email, phone_number, password)
+        VALUES (?, ?, ?, ?)
+      `;
+      await db?.run(query, [pharmacyName, email, phoneNumber, password]);
+    }, successCallback, errorCallback);
+  };
+
+  const validateLogin = async (emailOrPhone: string, password: string, successCallback?: (pharmacyName: string) => void, errorCallback?: (error: Error) => void) => {
+    await performSQLAction(async (db) => {
+      const query = `
+        SELECT pharmacy_name FROM users
+        WHERE (email = ? OR phone_number = ?) AND password = ?
+      `;
+      const result = await db?.query(query, [emailOrPhone, emailOrPhone, password]);
+
+      const values = result?.values ?? [];
+
+      if (values.length) {
+        const pharmacyName = values[0].pharmacy_name;
+        if (successCallback) successCallback(pharmacyName);
+      } else {
+        if (errorCallback) errorCallback(new Error('Invalid email/phone number or password.'));
+      }
+    }, undefined, errorCallback);
+  };
+
+  return { performSQLAction, initialized, registerUser, validateLogin };
 };
 
 export default useSQLiteDB;
